@@ -164,7 +164,7 @@ func (p *defaultSubjectParser) Parse() (ParsedSubject, error) {
 
 			// read value, everything until closing ]:
 			valuePos := p.pos
-			values, err := p.readValues()
+			values, err := p.readValues(output.Type())
 			if err != nil {
 				if err == io.EOF {
 					return output, &ParserValueInsufficientInputError{ValuePos: valuePos}
@@ -238,6 +238,7 @@ func (p *defaultSubjectParser) readAlphaStringUntil(boundary rune) (string, erro
 
 func (p *defaultSubjectParser) readAnyEnclosed(boundaryStart, boundaryEnd rune, inclusive bool) (string, error) {
 	consumed := []rune{}
+	// fmt.Println("readAnyEnclosed")
 	for {
 		nextRune, err := p.lookupOne()
 		if err != nil {
@@ -279,7 +280,7 @@ func (p *defaultSubjectParser) readAnyEnclosed(boundaryStart, boundaryEnd rune, 
 
 // Reads top level key value values. These have to be enclosed in [...].
 // Tries reading [, followed by any literal value separated by comma and followed by closing ].
-func (p *defaultSubjectParser) readValues() ([]string, error) {
+func (p *defaultSubjectParser) readValues(parserType ClientCertificateSubjectPrefixType) ([]string, error) {
 
 	values := []string{}
 
@@ -295,11 +296,14 @@ func (p *defaultSubjectParser) readValues() ([]string, error) {
 		}
 	}
 
-	nextValue, readValuesErr := p.readValue()
+	// fmt.Println("readValues", string(p.leftOver()))
+
+	nextValue, readValuesErr := p.readValue(parserType)
 	if readValuesErr != nil {
 		return values, readValuesErr
 	}
 	values = append(values, nextValue)
+
 	for {
 		nextRune, err := p.lookupOne()
 		if err != nil {
@@ -307,7 +311,7 @@ func (p *defaultSubjectParser) readValues() ([]string, error) {
 		}
 		if nextRune == ',' {
 			p.skip(1)
-			nextValue, readValuesErr := p.readValue()
+			nextValue, readValuesErr := p.readValue(parserType)
 			if readValuesErr != nil {
 				return values, readValuesErr
 			}
@@ -333,8 +337,11 @@ func (p *defaultSubjectParser) readValues() ([]string, error) {
 }
 
 // Read a single value. A valid value is any literal until unescaped , or ].
-func (p *defaultSubjectParser) readValue() (string, error) {
+func (p *defaultSubjectParser) readValue(parserType ClientCertificateSubjectPrefixType) (string, error) {
 	currentValue := []rune{}
+
+	// fmt.Println("readValue", string(p.leftOver()))
+
 	for {
 
 		nextRune, err := p.lookupOne()
@@ -357,16 +364,21 @@ func (p *defaultSubjectParser) readValue() (string, error) {
 		}
 
 		if nextRune == '{' {
-			boundaryEnd := '}'
 			// consume this bracket:
 			p.skip(1)
 			currentValue = append(currentValue, nextRune)
-			// followed by everything until matching closing bracket:
-			value, err := p.readAnyEnclosed(nextRune, boundaryEnd, true)
-			if err != nil {
-				return string(currentValue), err
+
+			if parserType == ClientCertificateSubjectPrefixPattern {
+				// followed by everything until matching closing bracket,
+				// but only when it's a pattern match, in case of a string match,
+				// it's okay to have unbalanced {
+				boundaryEnd := '}'
+				value, err := p.readAnyEnclosed(nextRune, boundaryEnd, true)
+				if err != nil {
+					return string(currentValue), err
+				}
+				currentValue = append(currentValue, []rune(value)...)
 			}
-			currentValue = append(currentValue, []rune(value)...)
 			continue
 		}
 
@@ -412,7 +424,10 @@ func (p *defaultSubjectParser) readEscapeSequence() (string, error) {
 			Position: p.pos - 1,
 		}
 	}
-	currentValue = append(currentValue, nextRune)
+
+	// we do not append the quoting \ rune, only what follows;
+	// leaving the line below as the reference in the code
+	// currentValue = append(currentValue, nextRune)
 
 	nextRune, err = p.lookupOne()
 	if err != nil {
