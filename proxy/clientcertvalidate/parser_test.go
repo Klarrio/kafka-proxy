@@ -294,7 +294,8 @@ func TestInvalidUnterminatedValuePatternSubjectParser(t *testing.T) {
 	}
 }
 
-func TestLiteralPatterns(t *testing.T) {
+func TestLiteralPatternsSuccessful(t *testing.T) {
+
 	testcases := map[string][]string{
 		`\[`:                    {`[`},
 		`\]`:                    {`]`},
@@ -303,7 +304,14 @@ func TestLiteralPatterns(t *testing.T) {
 		`{`:                     {`{`}, // there is no reason why you should ever escape {}
 		`}`:                     {`}`},
 		`value\, with\, commas`: {`value, with, commas`},
+		`\[\[value\]\]`:         {`[[value]]`},
 		`\[\,},{\\\]`:           {`[,}`, `{\]`},
+		`Company \[X, Ltd\]`:    {`Company [X`, ` Ltd]`},
+		`\a\b\c`:                {`abc`},
+		`\\a\b\c`:               {`\abc`},
+		`[some\,[]value]`:       {`[some,[]value]`},
+		`[some,[]value]`:        {`[some,[]value]`},
+		`\[some,[]value\]`:      {`[some,[]value]`},
 	}
 
 	for pattern, expected := range testcases {
@@ -314,8 +322,25 @@ func TestLiteralPatterns(t *testing.T) {
 			t.Errorf("failed to parse pattern '%s': %v", pattern, err)
 		}
 		values := subject.KVs()["O"]
-		if !compareStringArrays(expected, values) {
+		if !compareSortedStringArrays(expected, values) {
 			t.Errorf("when parsing pattern '%s', expected %#v got %#v", pattern, expected, values)
+		}
+	}
+}
+
+func TestLiteralPatternsFailing(t *testing.T) {
+
+	failingTestCases := map[string]bool{
+		`Company \[X\, Ltd]`: true,
+		`\[some,[]value]`:    true,
+	}
+
+	for pattern, _ := range failingTestCases {
+		input := fmt.Sprintf("s:/CN=[a]/O=[%s]/L=[whatever]", pattern)
+		parser := NewSubjectParser(input)
+		_, err := parser.Parse()
+		if err == nil {
+			t.Errorf("expected test case '%s' to fail but it succeeded", pattern)
 		}
 	}
 }
@@ -330,6 +355,8 @@ func TestRegexPatterns(t *testing.T) {
 		`^\[\\\[\]`: {matching: []string{"[", "[whatever"}, failing: []string{"", "whatever", "\\"}},
 		`\,`:        {matching: []string{",", "a,b,c", "\\,"}, failing: []string{"", "whatever", "\\"}},
 		`a{3\,}`:    {matching: []string{"baaaaaaaab", "aaa", "a aa aaaa aa a"}, failing: []string{"", "whatever", "\\"}}, // the rule is: commas should be escaped
+		`a{3\,5}`:   {matching: []string{"baaaaaaaab", "aaa", "a aa aaaa aa a"}, failing: []string{"", "whatever", "\\"}}, // the rule is: commas should be escaped
+		`a{3,5}`:    {matching: []string{"baaaaaaaab", "aaa", "a aa aaaa aa a"}, failing: []string{"", "whatever", "\\"}}, // the rule is: commas should be escaped
 		`a\,b$`:     {matching: []string{"a,b", "aaa a,b"}, failing: []string{"", "a,b ", "whatever"}},                    // the rule is: commas should be escaped
 	}
 	for pattern, tests := range testcases {
