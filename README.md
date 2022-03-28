@@ -1,7 +1,6 @@
 ## kafka-proxy
-**Work in progress**
 
-[![Build Status](https://travis-ci.com/grepplabs/kafka-proxy.svg?branch=master)](https://travis-ci.com/grepplabs/kafka-proxy)
+[![Build Status](https://app.travis-ci.com/grepplabs/kafka-proxy.svg?branch=master)](https://app.travis-ci.com/grepplabs/kafka-proxy)
 [![Docker Hub](https://img.shields.io/badge/docker-latest-blue.svg)](https://hub.docker.com/r/grepplabs/kafka-proxy)
 [![Docker Pulls](https://img.shields.io/docker/pulls/grepplabs/kafka-proxy)](https://hub.docker.com/r/grepplabs/kafka-proxy)
 
@@ -38,6 +37,7 @@ As not every Kafka release adds new messages/versions which are relevant to the 
 | Kafka proxy version | Kafka version |
 | ------------------  | -----------   |
 | 0.2.9               | 2.8.0         |
+| 0.3.1               | 3.1.0         |
 
 
 ### Install binary release
@@ -46,11 +46,11 @@ As not every Kafka release adds new messages/versions which are relevant to the 
 
    Linux
 
-        curl -Ls https://github.com/grepplabs/kafka-proxy/releases/download/v0.2.9/kafka-proxy-v0.2.9-linux-amd64.tar.gz | tar xz
+        curl -Ls https://github.com/grepplabs/kafka-proxy/releases/download/v0.3.1/kafka-proxy-v0.3.1-linux-amd64.tar.gz | tar xz
 
    macOS
 
-        curl -Ls https://github.com/grepplabs/kafka-proxy/releases/download/v0.2.9/kafka-proxy-v0.2.9-darwin-amd64.tar.gz | tar xz
+        curl -Ls https://github.com/grepplabs/kafka-proxy/releases/download/v0.3.1/kafka-proxy-v0.3.1-darwin-amd64.tar.gz | tar xz
 
 2. Move the binary in to your PATH.
 
@@ -68,7 +68,7 @@ Docker images are available on [Docker Hub](https://hub.docker.com/r/grepplabs/k
 
 You can launch a kafka-proxy container for trying it out with
 
-    docker run --rm -p 30001-30003:30001-30003 grepplabs/kafka-proxy:v0.2.9 \
+    docker run --rm -p 30001-30003:30001-30003 grepplabs/kafka-proxy:v0.3.1 \
               server \
             --bootstrap-server-mapping "localhost:19092,0.0.0.0:30001" \
             --bootstrap-server-mapping "localhost:29092,0.0.0.0:30002" \
@@ -87,7 +87,7 @@ Docker images with precompiled plugins located in `/opt/kafka-proxy/bin/` are ta
 
 You can launch a kafka-proxy container with auth-ldap plugin for trying it out with
 
-    docker run --rm -p 30001-30003:30001-30003 grepplabs/kafka-proxy:v0.2.9-all \
+    docker run --rm -p 30001-30003:30001-30003 grepplabs/kafka-proxy:v0.3.1-all \
                   server \
                 --bootstrap-server-mapping "localhost:19092,0.0.0.0:30001" \
                 --bootstrap-server-mapping "localhost:29092,0.0.0.0:30002" \
@@ -137,7 +137,7 @@ You can launch a kafka-proxy container with auth-ldap plugin for trying it out w
           --bootstrap-server-mapping stringArray                                         Mapping of Kafka bootstrap server address to local address (host:port,host:port(,advhost:advport))
           --debug-enable                                                                 Enable Debug endpoint
           --debug-listen-address string                                                  Debug listen address (default "0.0.0.0:6060")
-          --default-listener-ip string                                                   Default listener IP (default "127.0.0.1")
+          --default-listener-ip string                                                   Default listener IP (default "0.0.0.0")
           --dial-address-mapping stringArray                                             Mapping of target broker address to new one (host:port,host:port). The mapping is performed during connection establishment
           --dynamic-advertised-listener string                                           Advertised address for dynamic listeners. If empty, default-listener-ip is used
           --dynamic-listeners-disable                                                    Disable dynamic listeners.
@@ -223,6 +223,17 @@ You can launch a kafka-proxy container with auth-ldap plugin for trying it out w
     
 
     export BOOTSTRAP_SERVER_MAPPING="192.168.99.100:32401,0.0.0.0:32402 192.168.99.100:32402,0.0.0.0:32403" && kafka-proxy server
+
+
+### Restrict proxy listener cipher suites
+
+    kafka-proxy server --bootstrap-server-mapping "localhost:19092,0.0.0.0:30001,localhost:30001" \
+                       --bootstrap-server-mapping "localhost:29092,0.0.0.0:30002,localhost:30002" \
+                       --bootstrap-server-mapping "localhost:39092,0.0.0.0:30003,localhost:30003" \
+                       --proxy-listener-cert-file "tls/ca-cert.pem" \
+                       --proxy-listener-key-file "tls/ca-key.pem"  \
+                       --proxy-listener-tls-enable \
+                       --proxy-listener-cipher-suites TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256
 
 ### SASL authentication initiated by proxy example
 
