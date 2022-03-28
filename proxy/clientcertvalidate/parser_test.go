@@ -113,7 +113,7 @@ func TestValidStringSubjectParser(t *testing.T) {
 }
 
 func TestNestedParensParseAsValueParser(t *testing.T) {
-	input := "s:/CN=[aaa,[],2,3]/OU=[bbb,{123},5]/O=[ccc,[{1,2}],6,{7,8}]/S=[ddd]"
+	input := "s:/CN=[aaa,[],2,3]/OU=[bbb,{123},5]/O=[ccc,[{1,2}],6,{7\\,8}]/S=[ddd]"
 	parser := NewSubjectParser(input)
 	certSsubject, parseErr := parser.Parse()
 
@@ -140,7 +140,7 @@ func TestNestedParensParseAsValueParser(t *testing.T) {
 }
 
 func TestUnbalancedEscapedValueParser(t *testing.T) {
-	input := "s:/CN=[aaa,\\],2,3]/OU=[bbb,\\},5]/O=[ccc,\\}\\,\\],6,7\\,8\\}]/S=[ddd]"
+	input := "s:/CN=[aaa,\\],2,3]/OU=[bbb,},5]/O=[ccc,}\\,\\],6,7\\,8}]/S=[ddd]"
 	parser := NewSubjectParser(input)
 	certSsubject, parseErr := parser.Parse()
 
@@ -149,9 +149,9 @@ func TestUnbalancedEscapedValueParser(t *testing.T) {
 	}
 
 	expected := map[string][]string{
-		"CN": []string{"aaa", "\\]", "2", "3"},
-		"OU": []string{"bbb", "\\}", "5"},
-		"O":  []string{"ccc", "\\}\\,\\]", "6", "7\\,8\\}"},
+		"CN": []string{"aaa", "]", "2", "3"},
+		"OU": []string{"bbb", "}", "5"},
+		"O":  []string{"ccc", "},]", "6", "7,8}"},
 		"S":  []string{"ddd"},
 	}
 
@@ -266,9 +266,9 @@ func TestPatternWithEscapesSubjectParser(t *testing.T) {
 
 	expected := map[string][]string{
 		"CN": []string{"aaa.*", "1", "2", "3"},
-		"OU": []string{"bbb[a-z]{1,}\\{\\,\\}", "4", "5"},
+		"OU": []string{"bbb[a-z]{1,}{,}", "4", "5"},
 		"O":  []string{"eee", "ccc[1-9]{1,10}", "6"},
-		"S":  []string{"ddd?[[\\]]]", "7", "8"},
+		"S":  []string{"ddd?[[]]]", "7", "8"},
 	}
 
 	for k, v := range expected {
@@ -307,7 +307,7 @@ func TestLiteralPatterns(t *testing.T) {
 	}
 
 	for pattern, expected := range testcases {
-		input := fmt.Sprintf("s:/CN=[a]/O=[%s]", pattern)
+		input := fmt.Sprintf("s:/CN=[a]/O=[%s]/L=[whatever]", pattern)
 		parser := NewSubjectParser(input)
 		subject, err := parser.Parse()
 		if err != nil {
@@ -333,7 +333,7 @@ func TestRegexPatterns(t *testing.T) {
 		`a\,b$`:     {matching: []string{"a,b", "aaa a,b"}, failing: []string{"", "a,b ", "whatever"}},                    // the rule is: commas should be escaped
 	}
 	for pattern, tests := range testcases {
-		input := fmt.Sprintf("r:/CN=[a]/O=[%s]", pattern)
+		input := fmt.Sprintf("r:/CN=[a]/O=[%s]/L=[whatever]", pattern)
 		parser := NewSubjectParser(input)
 		subject, err := parser.Parse()
 		if err != nil {
