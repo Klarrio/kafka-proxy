@@ -1,6 +1,7 @@
 package clientcertvalidate
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"testing"
@@ -112,7 +113,7 @@ func TestValidStringSubjectParser(t *testing.T) {
 }
 
 func TestNestedParensParseAsValueParser(t *testing.T) {
-	input := "s:/CN=[aaa,[],2,3]/OU=[bbb,{123},5]/O=[ccc,[{1,2}],6,{7,8}]/S=[ddd]"
+	input := "s:/CN=[aaa,[],2,3]/OU=[bbb,{123},5]/O=[ccc,[{1,2}],6,{7\\,8}]/S=[ddd]"
 	parser := NewSubjectParser(input)
 	certSsubject, parseErr := parser.Parse()
 
@@ -139,7 +140,7 @@ func TestNestedParensParseAsValueParser(t *testing.T) {
 }
 
 func TestUnbalancedEscapedValueParser(t *testing.T) {
-	input := "s:/CN=[aaa,\\],2,3]/OU=[bbb,\\},5]/O=[ccc,\\}\\,\\],6,7\\,8\\}]/S=[ddd]"
+	input := "s:/CN=[aaa,\\],2,3]/OU=[bbb,},5]/O=[ccc,}\\,\\],6,7\\,8}]/S=[ddd]"
 	parser := NewSubjectParser(input)
 	certSsubject, parseErr := parser.Parse()
 
@@ -148,9 +149,9 @@ func TestUnbalancedEscapedValueParser(t *testing.T) {
 	}
 
 	expected := map[string][]string{
-		"CN": []string{"aaa", "\\]", "2", "3"},
-		"OU": []string{"bbb", "\\}", "5"},
-		"O":  []string{"ccc", "\\}\\,\\]", "6", "7\\,8\\}"},
+		"CN": []string{"aaa", "]", "2", "3"},
+		"OU": []string{"bbb", "}", "5"},
+		"O":  []string{"ccc", "},]", "6", "7,8}"},
 		"S":  []string{"ddd"},
 	}
 
@@ -265,9 +266,9 @@ func TestPatternWithEscapesSubjectParser(t *testing.T) {
 
 	expected := map[string][]string{
 		"CN": []string{"aaa.*", "1", "2", "3"},
-		"OU": []string{"bbb[a-z]{1,}\\{\\,\\}", "4", "5"},
+		"OU": []string{"bbb[a-z]{1,}{,}", "4", "5"},
 		"O":  []string{"eee", "ccc[1-9]{1,10}", "6"},
-		"S":  []string{"ddd?[[\\]]]", "7", "8"},
+		"S":  []string{"ddd?[[]]]", "7", "8"},
 	}
 
 	for k, v := range expected {
@@ -290,5 +291,91 @@ func TestInvalidUnterminatedValuePatternSubjectParser(t *testing.T) {
 	}
 	if !strings.HasPrefix(parseErr.Error(), "parser: value insufficient input:") {
 		t.Fatalf("expected different error type %v", parseErr)
+	}
+}
+
+func TestLiteralPatternsSuccessful(t *testing.T) {
+
+	testcases := map[string][]string{
+		`\[`:                    {`[`},
+		`\]`:                    {`]`},
+		`\,`:                    {`,`},
+		`\\`:                    {`\`},
+		`{`:                     {`{`}, // there is no reason why you should ever escape {}
+		`}`:                     {`}`},
+		`value\, with\, commas`: {`value, with, commas`},
+		`\[\[value\]\]`:         {`[[value]]`},
+		`\[\,},{\\\]`:           {`[,}`, `{\]`},
+		`Company \[X, Ltd\]`:    {`Company [X`, ` Ltd]`},
+		`\a\b\c`:                {`abc`},
+		`\\a\b\c`:               {`\abc`},
+		`[some\,[]value]`:       {`[some,[]value]`},
+		`[some,[]value]`:        {`[some,[]value]`},
+		`\[some,[]value\]`:      {`[some,[]value]`},
+	}
+
+	for pattern, expected := range testcases {
+		input := fmt.Sprintf("s:/CN=[a]/O=[%s]/L=[whatever]", pattern)
+		parser := NewSubjectParser(input)
+		subject, err := parser.Parse()
+		if err != nil {
+			t.Errorf("failed to parse pattern '%s': %v", pattern, err)
+		}
+		values := subject.KVs()["O"]
+		if !compareSortedStringArrays(expected, values) {
+			t.Errorf("when parsing pattern '%s', expected %#v got %#v", pattern, expected, values)
+		}
+	}
+}
+
+func TestLiteralPatternsFailing(t *testing.T) {
+
+	failingTestCases := map[string]bool{
+		`Company \[X\, Ltd]`: true,
+		`\[some,[]value]`:    true,
+	}
+
+	for pattern, _ := range failingTestCases {
+		input := fmt.Sprintf("s:/CN=[a]/O=[%s]/L=[whatever]", pattern)
+		parser := NewSubjectParser(input)
+		_, err := parser.Parse()
+		if err == nil {
+			t.Errorf("expected test case '%s' to fail but it succeeded", pattern)
+		}
+	}
+}
+
+func TestRegexPatterns(t *testing.T) {
+	testcases := map[string]struct {
+		matching []string
+		failing  []string
+	}{
+		`^\\\[`:     {matching: []string{"[", "[whatever"}, failing: []string{"", "whatever", "\\", "\\["}},
+		`^\[\[\]`:   {matching: []string{"[", "[whatever"}, failing: []string{"", "whatever", "\\"}},
+		`^\[\\\[\]`: {matching: []string{"[", "[whatever"}, failing: []string{"", "whatever", "\\"}},
+		`\,`:        {matching: []string{",", "a,b,c", "\\,"}, failing: []string{"", "whatever", "\\"}},
+		`a{3\,}`:    {matching: []string{"baaaaaaaab", "aaa", "a aa aaaa aa a"}, failing: []string{"", "whatever", "\\"}}, // the rule is: commas should be escaped
+		`a{3\,5}`:   {matching: []string{"baaaaaaaab", "aaa", "a aa aaaa aa a"}, failing: []string{"", "whatever", "\\"}}, // the rule is: commas should be escaped
+		`a{3,5}`:    {matching: []string{"baaaaaaaab", "aaa", "a aa aaaa aa a"}, failing: []string{"", "whatever", "\\"}}, // the rule is: commas should be escaped
+		`a\,b$`:     {matching: []string{"a,b", "aaa a,b"}, failing: []string{"", "a,b ", "whatever"}},                    // the rule is: commas should be escaped
+	}
+	for pattern, tests := range testcases {
+		input := fmt.Sprintf("r:/CN=[a]/O=[%s]/L=[whatever]", pattern)
+		parser := NewSubjectParser(input)
+		subject, err := parser.Parse()
+		if err != nil {
+			t.Errorf("failed to parse pattern '%s': %v", pattern, err)
+		}
+		re := subject.RegexpKVs()["O"][0]
+		for _, value := range tests.matching {
+			if !re.MatchString(value) {
+				t.Errorf("input pattern '%s' does not match '%s' (regex %s)", pattern, value, re.String())
+			}
+		}
+		for _, value := range tests.failing {
+			if re.MatchString(value) {
+				t.Errorf("input pattern '%s' should not match '%s' (regex %s)", pattern, value, re.String())
+			}
+		}
 	}
 }
