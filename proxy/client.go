@@ -305,7 +305,18 @@ func (c *Client) handleConn(conn Conn) {
 	}
 	c.conns.Add(conn.BrokerAddress, conn.LocalConnection)
 	localDesc := "local connection on " + conn.LocalConnection.LocalAddr().String() + " from " + conn.LocalConnection.RemoteAddr().String() + " (" + conn.BrokerAddress + ")"
-	copyThenClose(c.processorConfig, server, conn.LocalConnection, conn.BrokerAddress, conn.BrokerAddress, localDesc)
+
+	var id *string
+
+	tlsConn, ok := conn.LocalConnection.(*tls.Conn)
+	if ok {
+		if len(tlsConn.ConnectionState().PeerCertificates) > 0 {
+			commonName := tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName
+			id = &commonName
+		}
+	}
+
+	copyThenClose(c.processorConfig, server, conn.LocalConnection, conn.BrokerAddress, id, conn.BrokerAddress, localDesc)
 	if err := c.conns.Remove(conn.BrokerAddress, conn.LocalConnection); err != nil {
 		logrus.Info(err)
 	}

@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/grepplabs/kafka-proxy/proxy/protocol"
-	"github.com/sirupsen/logrus"
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/grepplabs/kafka-proxy/proxy/protocol"
+	"github.com/sirupsen/logrus"
+	"github.com/twmb/franz-go/pkg/kbin"
+	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 type DefaultRequestHandler struct {
@@ -85,9 +88,82 @@ func (handler *DefaultRequestHandler) handleRequest(dst DeadlineWriter, src Dead
 		}
 	}
 
-	mustReply, readBytes, err := handler.mustReply(requestKeyVersion, src, ctx)
-	if err != nil {
-		return true, err
+	mustReply := true
+	var readBytes []byte
+
+	switch requestKeyVersion.ApiKey {
+	case apiKeyProduce:
+		request := kmsg.NewPtrProduceRequest()
+		request.SetVersion(requestKeyVersion.ApiVersion)
+
+		readBytes = make([]byte, requestKeyVersion.Length-4)
+
+		_, err := io.ReadFull(src, readBytes)
+		if err != nil {
+			return false,
+				fmt.Errorf("could not read response: %w", err)
+		}
+
+		reader := kbin.Reader{Src: readBytes}
+		reader.Uint32() // Correlation ID
+		reader.String() // client_id
+
+		if request.IsFlexible() {
+			kmsg.ReadTags(&reader)
+		}
+
+		err = request.ReadFrom(reader.Src)
+		if err != nil {
+			return false,
+				fmt.Errorf("could not read response: %w", err)
+		}
+
+		mustReply = request.Acks != 0
+
+		if ctx.clientID != nil {
+			for _, topic := range request.Topics {
+				if *ctx.clientID == "test1" {
+					if topic.Topic != "allowed" {
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
+					}
+				}
+			}
+		}
+	case apiKeyFetch:
+		request := kmsg.NewPtrFetchRequest()
+		request.SetVersion(requestKeyVersion.ApiVersion)
+
+		readBytes = make([]byte, requestKeyVersion.Length-4)
+
+		_, err := io.ReadFull(src, readBytes)
+		if err != nil {
+			return false,
+				fmt.Errorf("could not read response: %w", err)
+		}
+
+		reader := kbin.Reader{Src: readBytes}
+		reader.Uint32() // Correlation ID
+		reader.String() // client_id
+
+		if request.IsFlexible() {
+			kmsg.ReadTags(&reader)
+		}
+
+		err = request.ReadFrom(reader.Src)
+		if err != nil {
+			return false,
+				fmt.Errorf("could not read response: %w", err)
+		}
+
+		if ctx.clientID != nil {
+			for _, topic := range request.Topics {
+				if *ctx.clientID == "test2" {
+					if topic.Topic != "allowed" {
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
+					}
+				}
+			}
+		}
 	}
 
 	// send inFlightRequest to channel before myCopyN to prevent race condition in proxyResponses
