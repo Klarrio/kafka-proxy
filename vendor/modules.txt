@@ -303,6 +303,13 @@ github.com/spf13/viper
 # github.com/stretchr/testify v1.8.1
 ## explicit; go 1.13
 github.com/stretchr/testify/assert
+# github.com/twmb/franz-go v1.17.1
+## explicit; go 1.21
+github.com/twmb/franz-go/pkg/kbin
+# github.com/twmb/franz-go/pkg/kmsg v1.8.0
+## explicit; go 1.19
+github.com/twmb/franz-go/pkg/kmsg
+github.com/twmb/franz-go/pkg/kmsg/internal/kbin
 # github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 ## explicit
 github.com/xdg/scram

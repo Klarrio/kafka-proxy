@@ -24,6 +24,8 @@ require (
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.0.2
 	github.com/stretchr/testify v1.8.1
+	github.com/twmb/franz-go v1.17.1
+	github.com/twmb/franz-go/pkg/kmsg v1.8.0
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 	github.com/youmark/pkcs8 v0.0.0-20240424034433-3c2c7870ae76
 	golang.org/x/net v0.23.0

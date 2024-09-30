@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 type DeadlineReadWriteCloser interface {
@@ -111,9 +112,9 @@ func copyError(readDesc, writeDesc string, readErr bool, err error) {
 	logrus.Infof("%v had error: %s", desc, err.Error())
 }
 
-func copyThenClose(cfg ProcessorConfig, remote, local DeadlineReadWriteCloser, brokerAddress string, remoteDesc, localDesc string) {
+func copyThenClose(cfg ProcessorConfig, remote, local DeadlineReadWriteCloser, brokerAddress string, id *string, remoteDesc, localDesc string) {
 
-	processor := newProcessor(cfg, brokerAddress)
+	processor := newProcessor(cfg, brokerAddress, id)
 
 	firstErr := make(chan error, 1)
 

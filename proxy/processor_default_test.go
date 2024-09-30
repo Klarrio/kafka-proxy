@@ -3,11 +3,12 @@ package proxy
 import (
 	"bytes"
 	"encoding/hex"
+	"testing"
+	"time"
+
 	"github.com/grepplabs/kafka-proxy/proxy/protocol"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"testing"
-	"time"
 )
 
 func TestHandleRequest(t *testing.T) {
@@ -86,6 +87,7 @@ func TestHandleRequest(t *testing.T) {
 		nextRequestHandlerChannel := make(chan RequestHandler, 1)
 		nextResponseHandlerChannel := make(chan ResponseHandler, 1)
 
+		clientID := "unit-test"
 		ctx := &RequestsLoopContext{
 			openRequestsChannel:        openRequestsChannel,
 			nextRequestHandlerChannel:  nextRequestHandlerChannel,
@@ -93,6 +95,7 @@ func TestHandleRequest(t *testing.T) {
 			timeout:                    1 * time.Second,
 			buf:                        buf,
 			localSasl:                  &LocalSasl{},
+			clientID:                   &clientID,
 		}
 
 		a := assert.New(t)

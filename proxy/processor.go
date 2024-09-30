@@ -2,9 +2,10 @@ package proxy
 
 import (
 	"errors"
+	"time"
+
 	"github.com/grepplabs/kafka-proxy/config"
 	"github.com/grepplabs/kafka-proxy/proxy/protocol"
-	"time"
 )
 
 const (
@@ -17,6 +18,7 @@ const (
 	minOpenRequests           = 16
 
 	apiKeyProduce        = int16(0)
+	apiKeyFetch          = int16(1)
 	apiKeySaslHandshake  = int16(17)
 	apiKeyApiApiVersions = int16(18)
 
@@ -61,11 +63,16 @@ type processor struct {
 	forbiddenApiKeys map[int16]struct{}
 	// metrics
 	brokerAddress string
+
+	clientID *string
+
+	topicIDMap *protocol.TopicIDMap
+
 	// producer will never send request with acks=0
 	producerAcks0Disabled bool
 }
 
-func newProcessor(cfg ProcessorConfig, brokerAddress string) *processor {
+func newProcessor(cfg ProcessorConfig, brokerAddress string, id *string) *processor {
 	maxOpenRequests := cfg.MaxOpenRequests
 	if maxOpenRequests < minOpenRequests {
 		maxOpenRequests = minOpenRequests
@@ -103,6 +110,8 @@ func newProcessor(cfg ProcessorConfig, brokerAddress string) *processor {
 		readTimeout:                readTimeout,
 		writeTimeout:               writeTimeout,
 		brokerAddress:              brokerAddress,
+		clientID:                   id,
+		topicIDMap:                 protocol.NewTopicIDMap(),
 		localSasl:                  cfg.LocalSasl,
 		authServer:                 cfg.AuthServer,
 		forbiddenApiKeys:           cfg.ForbiddenApiKeys,
@@ -125,6 +134,8 @@ func (p *processor) RequestsLoop(dst DeadlineWriter, src DeadlineReaderWriter) (
 		nextResponseHandlerChannel: p.nextResponseHandlerChannel,
 		timeout:                    p.writeTimeout,
 		brokerAddress:              p.brokerAddress,
+		clientID:                   p.clientID,
+		topicIDMap:                 p.topicIDMap,
 		forbiddenApiKeys:           p.forbiddenApiKeys,
 		buf:                        make([]byte, p.requestBufferSize),
 		localSasl:                  p.localSasl,
@@ -142,6 +153,8 @@ type RequestsLoopContext struct {
 
 	timeout          time.Duration
 	brokerAddress    string
+	clientID         *string
+	topicIDMap       *protocol.TopicIDMap
 	forbiddenApiKeys map[int16]struct{}
 	buf              []byte // bufSize
 
@@ -217,6 +230,7 @@ func (p *processor) ResponsesLoop(dst DeadlineWriter, src DeadlineReader) (readE
 		netAddressMappingFunc:      p.netAddressMappingFunc,
 		timeout:                    p.readTimeout,
 		brokerAddress:              p.brokerAddress,
+		topicIDMap:                 p.topicIDMap,
 		buf:                        make([]byte, p.responseBufferSize),
 	}
 	return ctx.responsesLoop(dst, src)
@@ -228,6 +242,7 @@ type ResponsesLoopContext struct {
 	netAddressMappingFunc      config.NetAddressMappingFunc
 	timeout                    time.Duration
 	brokerAddress              string
+	topicIDMap                 *protocol.TopicIDMap
 	buf                        []byte // bufSize
 }
 

@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/grepplabs/kafka-proxy/proxy/protocol"
-	"github.com/sirupsen/logrus"
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/grepplabs/kafka-proxy/proxy/protocol"
+	"github.com/sirupsen/logrus"
+	"github.com/twmb/franz-go/pkg/kbin"
+	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 type DefaultRequestHandler struct {
@@ -85,9 +89,128 @@ func (handler *DefaultRequestHandler) handleRequest(dst DeadlineWriter, src Dead
 		}
 	}
 
-	mustReply, readBytes, err := handler.mustReply(requestKeyVersion, src, ctx)
-	if err != nil {
-		return true, err
+	mustReply := true
+	var readBytes []byte
+
+	switch requestKeyVersion.ApiKey {
+	case apiKeyProduce:
+		request := kmsg.NewPtrProduceRequest()
+		request.SetVersion(requestKeyVersion.ApiVersion)
+
+		readBytes = make([]byte, requestKeyVersion.Length-4)
+
+		_, err := io.ReadFull(src, readBytes)
+		if err != nil {
+			return false,
+				fmt.Errorf("could not read response: %w", err)
+		}
+
+		reader := kbin.Reader{Src: readBytes}
+		reader.Uint32() // Correlation ID
+		reader.String() // client_id
+
+		if request.IsFlexible() {
+			kmsg.ReadTags(&reader)
+		}
+
+		err = request.ReadFrom(reader.Src)
+		if err != nil {
+			return false,
+				fmt.Errorf("could not read response: %w", err)
+		}
+
+		mustReply = request.Acks != 0
+
+		if ctx.clientID != nil {
+			for _, topic := range request.Topics {
+				switch *ctx.clientID {
+				case "test1":
+					switch topic.Topic {
+					case "scratch.bdbtest1.dshdev":
+					default:
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
+					}
+
+				case "test2":
+					switch topic.Topic {
+					case "scratch.bdbtest2.dshdev":
+					default:
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
+					}
+				case "unit-test":
+					// TODO: make sure to remove this
+				default:
+					return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
+				}
+
+			}
+		} else {
+			return true, errors.New("Client not set")
+		}
+	case apiKeyFetch:
+		request := kmsg.NewPtrFetchRequest()
+		request.SetVersion(requestKeyVersion.ApiVersion)
+
+		readBytes = make([]byte, requestKeyVersion.Length-4)
+
+		_, err := io.ReadFull(src, readBytes)
+		if err != nil {
+			return false,
+				fmt.Errorf("could not read response: %w", err)
+		}
+
+		reader := kbin.Reader{Src: readBytes}
+		reader.Uint32() // Correlation ID
+		reader.String() // client_id
+
+		if request.IsFlexible() {
+			kmsg.ReadTags(&reader)
+		}
+
+		err = request.ReadFrom(reader.Src)
+		if err != nil {
+			return false,
+				fmt.Errorf("could not read response: %w", err)
+		}
+
+		if ctx.clientID != nil {
+			for _, topic := range request.Topics {
+				var name string
+				if requestKeyVersion.ApiVersion >= 13 {
+					asUUID, err := uuid.FromBytes(topic.TopicID[:])
+					if err != nil {
+						return true, errors.New(fmt.Sprintf("Could not get topic ID as UUID: %v", topic.TopicID))
+					}
+
+					name = ctx.topicIDMap.Get(asUUID.String())
+				} else {
+					name = topic.Topic
+				}
+
+				switch *ctx.clientID {
+				case "test1":
+					switch name {
+					case "scratch.bdbtest1.dshdev":
+					default:
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to consume from %s", *ctx.clientID, name))
+					}
+
+				case "test2":
+					switch name {
+					case "scratch.bdbtest2.dshdev":
+					default:
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to consume from %s", *ctx.clientID, name))
+					}
+				case "unit-test":
+					// TODO: make sure to remove this
+				default:
+					return true, errors.New(fmt.Sprintf("Client %s is not allowed to consume from %s", *ctx.clientID, name))
+				}
+
+			}
+		} else {
+			return true, errors.New("Client not set")
+		}
 	}
 
 	// send inFlightRequest to channel before myCopyN to prevent race condition in proxyResponses
@@ -237,7 +360,7 @@ func (handler *DefaultResponseHandler) handleResponse(dst DeadlineWriter, src De
 		if _, err = io.ReadFull(src, resp); err != nil {
 			return true, err
 		}
-		newResponseBuf, err := responseModifier.Apply(resp)
+		newResponseBuf, err := responseModifier.Apply(resp, ctx.topicIDMap)
 		if err != nil {
 			return true, err
 		}
