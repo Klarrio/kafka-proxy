@@ -3,10 +3,11 @@ package protocol
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/google/uuid"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 
 	"github.com/grepplabs/kafka-proxy/config"
 	"github.com/pkg/errors"
@@ -383,7 +384,7 @@ func TestMetadataResponseV0(t *testing.T) {
 		return "", 0, errors.New("unexpected data")
 	})
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -551,7 +552,7 @@ func TestMetadataResponseV1(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyMetadata, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -738,7 +739,7 @@ func TestMetadataResponseV2(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyMetadata, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -930,7 +931,7 @@ func TestMetadataResponseV3(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyMetadata, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -1123,7 +1124,7 @@ func TestMetadataResponseV4(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyMetadata, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -1320,7 +1321,7 @@ func TestMetadataResponseV5(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyMetadata, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -1522,7 +1523,7 @@ func TestMetadataResponseV6(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyMetadata, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -1727,7 +1728,7 @@ func TestMetadataResponseV7(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyMetadata, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -1942,7 +1943,7 @@ func TestMetadataResponseV8(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyMetadata, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -2467,7 +2468,7 @@ func testMetadataResponse(t *testing.T, apiVersion int16, payload string, expect
 		t.Fatal(err)
 	}
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -2523,7 +2524,7 @@ func TestFindCoordinatorResponseV0(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyFindCoordinator, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -2593,7 +2594,7 @@ func TestFindCoordinatorResponseV1(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyFindCoordinator, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -2665,7 +2666,7 @@ func TestFindCoordinatorResponseV2(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyFindCoordinator, apiVersion, testResponseModifier)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -2723,7 +2724,7 @@ func TestFindCoordinatorResponseV3(t *testing.T) {
 
 	modifier, err := GetResponseModifier(apiKeyFindCoordinator, apiVersion, testResponseModifier2)
 	a.Nil(err)
-	resp, err = modifier.Apply(resp)
+	resp, err = modifier.Apply(resp, NewTopicIDMap())
 	a.Nil(err)
 	s, err = DecodeSchema(resp, schema)
 	a.Nil(err)
@@ -2888,7 +2889,7 @@ func TestMetadataResponses(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp, err = modifier.Apply(resp)
+		resp, err = modifier.Apply(resp, NewTopicIDMap())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -3000,7 +3001,7 @@ func TestFindCoordinatorResponse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp, err = modifier.Apply(resp)
+		resp, err = modifier.Apply(resp, NewTopicIDMap())
 		if err != nil {
 			t.Fatal(err)
 		}
