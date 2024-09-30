@@ -66,6 +66,8 @@ type processor struct {
 
 	clientID *string
 
+	topicIDMap *protocol.TopicIDMap
+
 	// producer will never send request with acks=0
 	producerAcks0Disabled bool
 }
@@ -109,6 +111,7 @@ func newProcessor(cfg ProcessorConfig, brokerAddress string, id *string) *proces
 		writeTimeout:               writeTimeout,
 		brokerAddress:              brokerAddress,
 		clientID:                   id,
+		topicIDMap:                 protocol.NewTopicIDMap(),
 		localSasl:                  cfg.LocalSasl,
 		authServer:                 cfg.AuthServer,
 		forbiddenApiKeys:           cfg.ForbiddenApiKeys,
@@ -132,6 +135,7 @@ func (p *processor) RequestsLoop(dst DeadlineWriter, src DeadlineReaderWriter) (
 		timeout:                    p.writeTimeout,
 		brokerAddress:              p.brokerAddress,
 		clientID:                   p.clientID,
+		topicIDMap:                 p.topicIDMap,
 		forbiddenApiKeys:           p.forbiddenApiKeys,
 		buf:                        make([]byte, p.requestBufferSize),
 		localSasl:                  p.localSasl,
@@ -150,6 +154,7 @@ type RequestsLoopContext struct {
 	timeout          time.Duration
 	brokerAddress    string
 	clientID         *string
+	topicIDMap       *protocol.TopicIDMap
 	forbiddenApiKeys map[int16]struct{}
 	buf              []byte // bufSize
 
@@ -225,6 +230,7 @@ func (p *processor) ResponsesLoop(dst DeadlineWriter, src DeadlineReader) (readE
 		netAddressMappingFunc:      p.netAddressMappingFunc,
 		timeout:                    p.readTimeout,
 		brokerAddress:              p.brokerAddress,
+		topicIDMap:                 p.topicIDMap,
 		buf:                        make([]byte, p.responseBufferSize),
 	}
 	return ctx.responsesLoop(dst, src)
@@ -236,6 +242,7 @@ type ResponsesLoopContext struct {
 	netAddressMappingFunc      config.NetAddressMappingFunc
 	timeout                    time.Duration
 	brokerAddress              string
+	topicIDMap                 *protocol.TopicIDMap
 	buf                        []byte // bufSize
 }
 

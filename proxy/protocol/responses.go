@@ -3,7 +3,9 @@ package protocol
 import (
 	"errors"
 	"fmt"
+	"sync"
 
+	"github.com/google/uuid"
 	"github.com/grepplabs/kafka-proxy/config"
 )
 
@@ -12,12 +14,46 @@ const (
 	apiKeyFindCoordinator = 10
 
 	brokersKeyName = "brokers"
-	hostKeyName    = "host"
-	portKeyName    = "port"
+	topicsKeyName  = "topic_metadata"
+
+	topicIDKeyName   = "topic_id"
+	topicNameKeyName = "name"
+
+	hostKeyName = "host"
+	portKeyName = "port"
 
 	coordinatorKeyName  = "coordinator"
 	coordinatorsKeyName = "coordinators"
 )
+
+type TopicIDMap struct {
+	mu    sync.Mutex
+	idMap map[string]string
+}
+
+func (tim *TopicIDMap) Add(uuid string, name string) {
+	tim.mu.Lock()
+
+	//fmt.Printf("ADD %p: %s %s\n", tim, uuid, name)
+	tim.idMap[uuid] = name
+	tim.mu.Unlock()
+}
+
+func (tim *TopicIDMap) Get(uuid string) string {
+	tim.mu.Lock()
+	defer tim.mu.Unlock()
+
+	//fmt.Printf("GET %p: %s\n", tim, uuid)
+	return tim.idMap[uuid]
+}
+
+var globalIDMap = &TopicIDMap{
+	idMap: make(map[string]string),
+}
+
+func NewTopicIDMap() *TopicIDMap {
+	return globalIDMap
+}
 
 var (
 	metadataResponseSchemaVersions        = createMetadataResponseSchemaVersions()
@@ -47,7 +83,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 
 	metadataResponseV0 := NewSchema("metadata_response_v0",
 		&Array{Name: brokersKeyName, Ty: metadataBrokerV0},
-		&Array{Name: "topic_metadata", Ty: topicMetadataV0},
+		&Array{Name: topicsKeyName, Ty: topicMetadataV0},
 	)
 
 	metadataBrokerV1 := NewSchema("metadata_broker_v1",
@@ -137,8 +173,8 @@ func createMetadataResponseSchemaVersions() []Schema {
 
 	topicMetadataSchema10 := NewSchema("topic_metadata_schema10",
 		&Mfield{Name: "error_code", Ty: TypeInt16},
-		&Mfield{Name: "name", Ty: TypeCompactStr},
-		&Mfield{Name: "topic_id", Ty: TypeUuid},
+		&Mfield{Name: topicNameKeyName, Ty: TypeCompactStr},
+		&Mfield{Name: topicIDKeyName, Ty: TypeUuid},
 		&Mfield{Name: "is_internal", Ty: TypeBool},
 		&CompactArray{Name: "partition_metadata", Ty: partitionMetadataSchema9},
 		&Mfield{Name: "topic_authorized_operations", Ty: TypeInt32},
@@ -147,8 +183,8 @@ func createMetadataResponseSchemaVersions() []Schema {
 
 	topicMetadataSchema12 := NewSchema("topic_metadata_schema12",
 		&Mfield{Name: "error_code", Ty: TypeInt16},
-		&Mfield{Name: "name", Ty: TypeCompactNullableStr},
-		&Mfield{Name: "topic_id", Ty: TypeUuid},
+		&Mfield{Name: topicNameKeyName, Ty: TypeCompactNullableStr},
+		&Mfield{Name: topicIDKeyName, Ty: TypeUuid},
 		&Mfield{Name: "is_internal", Ty: TypeBool},
 		&CompactArray{Name: "partition_metadata", Ty: partitionMetadataSchema9},
 		&Mfield{Name: "topic_authorized_operations", Ty: TypeInt32},
@@ -158,14 +194,14 @@ func createMetadataResponseSchemaVersions() []Schema {
 	metadataResponseV1 := NewSchema("metadata_response_v1",
 		&Array{Name: brokersKeyName, Ty: metadataBrokerV1},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&Array{Name: "topic_metadata", Ty: topicMetadataV1},
+		&Array{Name: topicsKeyName, Ty: topicMetadataV1},
 	)
 
 	metadataResponseV2 := NewSchema("metadata_response_v2",
 		&Array{Name: brokersKeyName, Ty: metadataBrokerV1},
 		&Mfield{Name: "cluster_id", Ty: TypeNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&Array{Name: "topic_metadata", Ty: topicMetadataV1},
+		&Array{Name: topicsKeyName, Ty: topicMetadataV1},
 	)
 
 	metadataResponseV3 := NewSchema("metadata_response_v3",
@@ -173,7 +209,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 		&Array{Name: brokersKeyName, Ty: metadataBrokerV1},
 		&Mfield{Name: "cluster_id", Ty: TypeNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&Array{Name: "topic_metadata", Ty: topicMetadataV1},
+		&Array{Name: topicsKeyName, Ty: topicMetadataV1},
 	)
 
 	metadataResponseV4 := metadataResponseV3
@@ -183,7 +219,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 		&Array{Name: brokersKeyName, Ty: metadataBrokerV1},
 		&Mfield{Name: "cluster_id", Ty: TypeNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&Array{Name: "topic_metadata", Ty: topicMetadataV2},
+		&Array{Name: topicsKeyName, Ty: topicMetadataV2},
 	)
 
 	metadataResponseV6 := metadataResponseV5
@@ -193,7 +229,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 		&Array{Name: brokersKeyName, Ty: metadataBrokerV1},
 		&Mfield{Name: "cluster_id", Ty: TypeNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&Array{Name: "topic_metadata", Ty: topicMetadataV7},
+		&Array{Name: topicsKeyName, Ty: topicMetadataV7},
 	)
 
 	metadataResponseV8 := NewSchema("metadata_response_v8",
@@ -201,7 +237,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 		&Array{Name: brokersKeyName, Ty: metadataBrokerV1},
 		&Mfield{Name: "cluster_id", Ty: TypeNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&Array{Name: "topic_metadata", Ty: topicMetadataV8},
+		&Array{Name: topicsKeyName, Ty: topicMetadataV8},
 		&Mfield{Name: "cluster_authorized_operations", Ty: TypeInt32},
 	)
 
@@ -210,7 +246,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 		&CompactArray{Name: brokersKeyName, Ty: metadataBrokerSchema9},
 		&Mfield{Name: "cluster_id", Ty: TypeCompactNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&CompactArray{Name: "topic_metadata", Ty: topicMetadataSchema9},
+		&CompactArray{Name: topicsKeyName, Ty: topicMetadataSchema9},
 		&Mfield{Name: "cluster_authorized_operations", Ty: TypeInt32},
 		&SchemaTaggedFields{Name: "response_tagged_fields"},
 	)
@@ -220,7 +256,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 		&CompactArray{Name: brokersKeyName, Ty: metadataBrokerSchema9},
 		&Mfield{Name: "cluster_id", Ty: TypeCompactNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&CompactArray{Name: "topic_metadata", Ty: topicMetadataSchema10},
+		&CompactArray{Name: topicsKeyName, Ty: topicMetadataSchema10},
 		&Mfield{Name: "cluster_authorized_operations", Ty: TypeInt32},
 		&SchemaTaggedFields{Name: "response_tagged_fields"},
 	)
@@ -230,7 +266,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 		&CompactArray{Name: brokersKeyName, Ty: metadataBrokerSchema9},
 		&Mfield{Name: "cluster_id", Ty: TypeCompactNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&CompactArray{Name: "topic_metadata", Ty: topicMetadataSchema10},
+		&CompactArray{Name: topicsKeyName, Ty: topicMetadataSchema10},
 		&SchemaTaggedFields{Name: "response_tagged_fields"},
 	)
 
@@ -239,7 +275,7 @@ func createMetadataResponseSchemaVersions() []Schema {
 		&CompactArray{Name: brokersKeyName, Ty: metadataBrokerSchema9},
 		&Mfield{Name: "cluster_id", Ty: TypeCompactNullableStr},
 		&Mfield{Name: "controller_id", Ty: TypeInt32},
-		&CompactArray{Name: "topic_metadata", Ty: topicMetadataSchema12},
+		&CompactArray{Name: topicsKeyName, Ty: topicMetadataSchema12},
 		&SchemaTaggedFields{Name: "response_tagged_fields"},
 	)
 
@@ -296,13 +332,30 @@ func createFindCoordinatorResponseSchemaVersions() []Schema {
 	return []Schema{findCoordinatorResponseV0, findCoordinatorResponseV1, findCoordinatorResponseV2, findCoordinatorResponseV3, findCoordinatorResponseV4}
 }
 
-func modifyMetadataResponse(decodedStruct *Struct, fn config.NetAddressMappingFunc) error {
+func modifyMetadataResponse(decodedStruct *Struct, fn config.NetAddressMappingFunc, topicIDMap *TopicIDMap) error {
 	if decodedStruct == nil {
 		return errors.New("decoded struct must not be nil")
 	}
 	if fn == nil {
 		return errors.New("net address mapper must not be nil")
 	}
+
+	topicsArray, ok := decodedStruct.Get(topicsKeyName).([]interface{})
+	if !ok {
+		return errors.New("topics list not found")
+	}
+	for _, topicElement := range topicsArray {
+		topic := topicElement.(*Struct)
+
+		id, ok := topic.Get(topicIDKeyName).(uuid.UUID)
+		if ok {
+			name, ok := topic.Get(topicNameKeyName).(*string)
+			if ok {
+				topicIDMap.Add(id.String(), *name)
+			}
+		}
+	}
+
 	brokersArray, ok := decodedStruct.Get(brokersKeyName).([]interface{})
 	if !ok {
 		return errors.New("brokers list not found")
@@ -342,7 +395,7 @@ func modifyMetadataResponse(decodedStruct *Struct, fn config.NetAddressMappingFu
 	return nil
 }
 
-func modifyFindCoordinatorResponse(decodedStruct *Struct, fn config.NetAddressMappingFunc) error {
+func modifyFindCoordinatorResponse(decodedStruct *Struct, fn config.NetAddressMappingFunc, topicIDMap *TopicIDMap) error {
 	if decodedStruct == nil {
 		return errors.New("decoded struct must not be nil")
 	}
@@ -405,10 +458,10 @@ func modifyCoordinator(decodedStruct *Struct, fn config.NetAddressMappingFunc) e
 }
 
 type ResponseModifier interface {
-	Apply(resp []byte) ([]byte, error)
+	Apply(resp []byte, topicIDMap *TopicIDMap) ([]byte, error)
 }
 
-type modifyResponseFunc func(decodedStruct *Struct, fn config.NetAddressMappingFunc) error
+type modifyResponseFunc func(decodedStruct *Struct, fn config.NetAddressMappingFunc, topicIDMap *TopicIDMap) error
 
 type responseModifier struct {
 	schema                Schema
@@ -416,12 +469,12 @@ type responseModifier struct {
 	netAddressMappingFunc config.NetAddressMappingFunc
 }
 
-func (f *responseModifier) Apply(resp []byte) ([]byte, error) {
+func (f *responseModifier) Apply(resp []byte, topicIDMap *TopicIDMap) ([]byte, error) {
 	decodedStruct, err := DecodeSchema(resp, f.schema)
 	if err != nil {
 		return nil, err
 	}
-	err = f.modifyResponseFunc(decodedStruct, f.netAddressMappingFunc)
+	err = f.modifyResponseFunc(decodedStruct, f.netAddressMappingFunc, topicIDMap)
 	if err != nil {
 		return nil, err
 	}

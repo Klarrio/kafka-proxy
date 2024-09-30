@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/grepplabs/kafka-proxy/proxy/protocol"
 	"github.com/sirupsen/logrus"
 	"github.com/twmb/franz-go/pkg/kbin"
@@ -122,12 +123,29 @@ func (handler *DefaultRequestHandler) handleRequest(dst DeadlineWriter, src Dead
 
 		if ctx.clientID != nil {
 			for _, topic := range request.Topics {
-				if *ctx.clientID == "test1" {
-					if topic.Topic != "allowed" {
+				switch *ctx.clientID {
+				case "test1":
+					switch topic.Topic {
+					case "scratch.bdbtest1.dshdev":
+					default:
 						return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
 					}
+
+				case "test2":
+					switch topic.Topic {
+					case "scratch.bdbtest2.dshdev":
+					default:
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
+					}
+				case "unit-test":
+					// TODO: make sure to remove this
+				default:
+					return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
 				}
+
 			}
+		} else {
+			return true, errors.New("Client not set")
 		}
 	case apiKeyFetch:
 		request := kmsg.NewPtrFetchRequest()
@@ -157,12 +175,41 @@ func (handler *DefaultRequestHandler) handleRequest(dst DeadlineWriter, src Dead
 
 		if ctx.clientID != nil {
 			for _, topic := range request.Topics {
-				if *ctx.clientID == "test2" {
-					if topic.Topic != "allowed" {
-						return true, errors.New(fmt.Sprintf("Client %s is not allowed to produce to %s", *ctx.clientID, topic.Topic))
+				var name string
+				if requestKeyVersion.ApiVersion >= 13 {
+					asUUID, err := uuid.FromBytes(topic.TopicID[:])
+					if err != nil {
+						return true, errors.New(fmt.Sprintf("Could not get topic ID as UUID: %v", topic.TopicID))
 					}
+
+					name = ctx.topicIDMap.Get(asUUID.String())
+				} else {
+					name = topic.Topic
 				}
+
+				switch *ctx.clientID {
+				case "test1":
+					switch name {
+					case "scratch.bdbtest1.dshdev":
+					default:
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to consume from %s", *ctx.clientID, name))
+					}
+
+				case "test2":
+					switch name {
+					case "scratch.bdbtest2.dshdev":
+					default:
+						return true, errors.New(fmt.Sprintf("Client %s is not allowed to consume from %s", *ctx.clientID, name))
+					}
+				case "unit-test":
+					// TODO: make sure to remove this
+				default:
+					return true, errors.New(fmt.Sprintf("Client %s is not allowed to consume from %s", *ctx.clientID, name))
+				}
+
 			}
+		} else {
+			return true, errors.New("Client not set")
 		}
 	}
 
@@ -313,7 +360,7 @@ func (handler *DefaultResponseHandler) handleResponse(dst DeadlineWriter, src De
 		if _, err = io.ReadFull(src, resp); err != nil {
 			return true, err
 		}
-		newResponseBuf, err := responseModifier.Apply(resp)
+		newResponseBuf, err := responseModifier.Apply(resp, ctx.topicIDMap)
 		if err != nil {
 			return true, err
 		}

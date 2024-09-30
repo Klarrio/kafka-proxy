@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -310,6 +311,12 @@ func (c *Client) handleConn(conn Conn) {
 
 	tlsConn, ok := conn.LocalConnection.(*tls.Conn)
 	if ok {
+		err := tlsConn.HandshakeContext(context.TODO())
+		if err != nil {
+			logrus.Info(err)
+			return
+		}
+
 		if len(tlsConn.ConnectionState().PeerCertificates) > 0 {
 			commonName := tlsConn.ConnectionState().PeerCertificates[0].Subject.CommonName
 			id = &commonName
