@@ -42,7 +42,7 @@ func TestValidEnabledClientCertSubjectValidate(t *testing.T) {
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.Nil(err)
 }
@@ -77,7 +77,7 @@ func TestInvalidEnabledClientCertSubjectValidate(t *testing.T) {
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.NotNil(err)
 	a.Contains(err.Error(), "tls: no client certificate presented for any of the defined client subjects")
@@ -112,7 +112,7 @@ func TestValidEnabledClientCertSubjectMayContainNotRequiredValues(t *testing.T) 
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.Nil(err)
 }
@@ -141,7 +141,7 @@ func TestValidEnabledClientCertSubjectMayContainValuesInDifferentOrder(t *testin
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.Nil(err)
 }
@@ -185,7 +185,7 @@ func TestClientCertMultipleSubjects(t *testing.T) {
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.Nil(err)
 }
@@ -229,7 +229,7 @@ func TestClientCertMultipleSubjectsPatterns(t *testing.T) {
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.Nil(err)
 }
@@ -266,7 +266,7 @@ func TestClientCertMultiplePatternMatchingFields(t *testing.T) {
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.Nil(err)
 }
@@ -303,7 +303,7 @@ func TestClientCertMultiplePatternNotMatchingFields(t *testing.T) {
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.NotNil(err)
 }
@@ -340,7 +340,7 @@ func TestClientCertMultiplePatternMatchingFieldsOrderDoesNotMatter(t *testing.T)
 	c.Kafka.TLS.ClientCertFile = bundle.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle.ClientKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.Nil(err)
 }

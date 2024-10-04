@@ -5,22 +5,41 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"github.com/pkg/errors"
-	"golang.org/x/net/proxy"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"golang.org/x/net/proxy"
 )
 
-type Dialer interface {
-	Dial(network, addr string) (c net.Conn, err error)
+type DialerWithContext interface {
+	DialWithContext(network, addr string, ctx *ConnectionContext) (c net.Conn, err error)
 }
 
 type directDialer struct {
 	dialTimeout time.Duration
 	keepAlive   time.Duration
+}
+
+func (d directDialer) DialWithContext(network, addr string, _ *ConnectionContext) (net.Conn, error) {
+	dialer := net.Dialer{
+		Timeout:   d.dialTimeout,
+		KeepAlive: d.keepAlive,
+	}
+	conn, err := dialer.Dial(network, addr)
+	if err != nil {
+		return nil, err
+	}
+	err = conn.SetDeadline(time.Now().Add(d.dialTimeout))
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, err
 }
 
 func (d directDialer) Dial(network, addr string) (net.Conn, error) {
@@ -46,7 +65,7 @@ type socks5Dialer struct {
 	username, password      string
 }
 
-func (d socks5Dialer) Dial(network, addr string) (net.Conn, error) {
+func (d socks5Dialer) DialWithContext(network, addr string, _ *ConnectionContext) (net.Conn, error) {
 	if d.proxyNetwork == "" || d.proxyAddr == "" {
 		return nil, errors.New("socks5 proxy network and addr must be not empty")
 	}
@@ -70,17 +89,29 @@ func (d socks5Dialer) Dial(network, addr string) (net.Conn, error) {
 
 type tlsDialer struct {
 	timeout   time.Duration
-	rawDialer Dialer
+	rawDialer DialerWithContext
 	config    *tls.Config
+	certStore CertStore
 }
 
 // see tls.DialWithDialer
-func (d tlsDialer) Dial(network, addr string) (net.Conn, error) {
+func (d tlsDialer) DialWithContext(network, addr string, ctx *ConnectionContext) (net.Conn, error) {
 	if d.config == nil {
 		return nil, errors.New("tlsConfig must not be nil")
 	}
 	if d.rawDialer == nil {
 		return nil, errors.New("rawDialer must not be nil")
+	}
+	if ctx == nil {
+		return nil, errors.New("ctx must not be nil")
+	}
+	if ctx.clientID == nil || *ctx.clientID == "" {
+		return nil, errors.New("clientID must not be nil or empty")
+	}
+
+	config, err := d.getTLSConfig(addr, ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	timeout := d.timeout
@@ -95,26 +126,9 @@ func (d tlsDialer) Dial(network, addr string) (net.Conn, error) {
 		defer timer.Stop()
 	}
 
-	rawConn, err := d.rawDialer.Dial(network, addr)
+	rawConn, err := d.rawDialer.DialWithContext(network, addr, ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	colonPos := strings.LastIndex(addr, ":")
-	if colonPos == -1 {
-		colonPos = len(addr)
-	}
-	hostname := addr[:colonPos]
-
-	config := d.config
-
-	// If no ServerName is set, infer the ServerName
-	// from the hostname we're connecting to.
-	if config.ServerName == "" {
-		// Make a copy to avoid polluting argument or default.
-		c := config.Clone()
-		c.ServerName = hostname
-		config = c
 	}
 
 	conn := tls.Client(rawConn, config)
@@ -137,14 +151,48 @@ func (d tlsDialer) Dial(network, addr string) (net.Conn, error) {
 	return conn, nil
 }
 
+func (d tlsDialer) getTLSConfig(addr string, ctx *ConnectionContext) (*tls.Config, error) {
+	if d.certStore == nil {
+		return nil, errors.New("certStore must not be nil")
+	}
+
+	var config = d.config
+
+	colonPos := strings.LastIndex(addr, ":")
+	if colonPos == -1 {
+		colonPos = len(addr)
+	} 
+	hostname := addr[:colonPos]
+	// If no ServerName is set, infer the ServerName
+	// from the hostname we're connecting to.
+	if config.ServerName == "" {
+		// Make a copy to avoid polluting argument or default.
+		c := config.Clone()
+		c.ServerName = hostname
+		config = c
+	}
+
+	// Look up the certificate for the clientID
+	if cert, ok := d.certStore.Get(*ctx.clientID); ok {
+		logrus.Debugf("Using certificate %s for %s", &cert.Leaf.Subject, *ctx.clientID)
+		c := config.Clone()
+		c.Certificates = []tls.Certificate{cert}
+		config = c
+	} else {	
+		return nil, errors.Errorf("No certificate found for %s", *ctx.clientID)
+	}
+
+	return config, nil
+}
+
 type httpProxy struct {
-	forwardDialer      Dialer
+	forwardDialer      DialerWithContext
 	network            string
 	hostPort           string
 	username, password string
 }
 
-func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
+func (s *httpProxy) DialWithContext(network, addr string, ctx *ConnectionContext) (net.Conn, error) {
 	reqURL, err := url.Parse("http://" + addr)
 	if err != nil {
 		return nil, err
@@ -159,7 +207,7 @@ func (s *httpProxy) Dial(network, addr string) (net.Conn, error) {
 		req.Header.Set("Proxy-Authorization", basic)
 	}
 
-	c, err := s.forwardDialer.Dial(s.network, s.hostPort)
+	c, err := s.forwardDialer.DialWithContext(s.network, s.hostPort, ctx)
 	if err != nil {
 		return nil, err
 	}

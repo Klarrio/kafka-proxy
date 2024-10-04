@@ -154,26 +154,6 @@ func newTLSClientConfig(conf *config.Config) (*tls.Config, error) {
 
 	cfg := &tls.Config{InsecureSkipVerify: opts.InsecureSkipVerify}
 
-	if opts.ClientCertFile != "" && opts.ClientKeyFile != "" {
-		certPEMBlock, err := ioutil.ReadFile(opts.ClientCertFile)
-		if err != nil {
-			return nil, err
-		}
-		keyPEMBlock, err := ioutil.ReadFile(opts.ClientKeyFile)
-		if err != nil {
-			return nil, err
-		}
-		keyPEMBlock, err = decryptPEM(keyPEMBlock, opts.ClientKeyPassword)
-		if err != nil {
-			return nil, err
-		}
-		cert, err := tls.X509KeyPair(certPEMBlock, keyPEMBlock)
-		if err != nil {
-			return nil, err
-		}
-		cfg.Certificates = []tls.Certificate{cert}
-	}
-
 	if opts.CAChainCertFile != "" {
 		caCertPEMBlock, err := ioutil.ReadFile(opts.CAChainCertFile)
 		if err != nil {

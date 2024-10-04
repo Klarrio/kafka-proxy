@@ -119,7 +119,7 @@ func TestTLSUnknownAuthorityNoCAChainCert(t *testing.T) {
 	c.Proxy.TLS.ListenerCertFile = bundle.ServerCert.Name()
 	c.Proxy.TLS.ListenerKeyFile = bundle.ServerKey.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 	a.EqualError(err, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
 }
 
@@ -138,7 +138,7 @@ func TestTLSUnknownAuthorityWrongCAChainCert(t *testing.T) {
 	// different bundle -> incorrect cert
 	c.Kafka.TLS.CAChainCertFile = bundle2.ServerCert.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 	a.EqualError(err, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
 }
 
@@ -153,7 +153,7 @@ func TestTLSInsecureSkipVerify(t *testing.T) {
 	c.Proxy.TLS.ListenerKeyFile = bundle.ServerKey.Name()
 	c.Kafka.TLS.InsecureSkipVerify = true
 
-	c1, c2, stop, err := makeTLSPipe(c, nil)
+	c1, c2, stop, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -172,7 +172,7 @@ func TestTLSSelfSigned(t *testing.T) {
 	c.Proxy.TLS.ListenerKeyFile = bundle.ServerKey.Name()
 	c.Kafka.TLS.CAChainCertFile = bundle.ServerCert.Name()
 
-	c1, c2, stop, err := makeTLSPipe(c, nil)
+	c1, c2, stop, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -191,7 +191,7 @@ func TestTLSThroughSocks5Proxy(t *testing.T) {
 	c.Proxy.TLS.ListenerKeyFile = bundle.ServerKey.Name()
 	c.Kafka.TLS.CAChainCertFile = bundle.ServerCert.Name()
 
-	c1, c2, stop, err := makeTLSSocks5ProxyPipe(c, nil, "", "")
+	c1, c2, stop, err := makeTLSSocks5ProxyPipe(c, nil, "", "", EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -210,7 +210,7 @@ func TestTLSThroughHttpProxy(t *testing.T) {
 	c.Proxy.TLS.ListenerKeyFile = bundle.ServerKey.Name()
 	c.Kafka.TLS.CAChainCertFile = bundle.ServerCert.Name()
 
-	c1, c2, stop, err := makeTLSHttpProxyPipe(c, "", "", "", "")
+	c1, c2, stop, err := makeTLSHttpProxyPipe(c, "", "", "", "", EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -235,7 +235,7 @@ func TestTLSThroughSocks5ProxyWithCredentials(t *testing.T) {
 			password: "test-password",
 		},
 	}
-	c1, c2, stop, err := makeTLSSocks5ProxyPipe(c, authenticator, "test-user", "test-password")
+	c1, c2, stop, err := makeTLSSocks5ProxyPipe(c, authenticator, "test-user", "test-password", EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -253,7 +253,7 @@ func TestTLSThroughHttpProxyWithCredentials(t *testing.T) {
 	c.Proxy.TLS.ListenerCertFile = bundle.ServerCert.Name()
 	c.Proxy.TLS.ListenerKeyFile = bundle.ServerKey.Name()
 	c.Kafka.TLS.CAChainCertFile = bundle.ServerCert.Name()
-	c1, c2, stop, err := makeTLSHttpProxyPipe(c, "test-user", "test-password", "test-user", "test-password")
+	c1, c2, stop, err := makeTLSHttpProxyPipe(c, "test-user", "test-password", "test-user", "test-password", EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -278,7 +278,7 @@ func TestTLSThroughSocks5ProxyWithBadCredentials(t *testing.T) {
 			password: "test-password",
 		},
 	}
-	_, _, _, err := makeTLSSocks5ProxyPipe(c, authenticator, "test-user", "bad-password")
+	_, _, _, err := makeTLSSocks5ProxyPipe(c, authenticator, "test-user", "bad-password", EmptyConnectionContext())
 	a.NotNil(err)
 	a.True(strings.HasPrefix(err.Error(), "socks connect"))
 	a.True(strings.HasSuffix(err.Error(), "username/password authentication failed"))
@@ -295,7 +295,7 @@ func TestTLSThroughHttpProxyWithBadCredentials(t *testing.T) {
 	c.Proxy.TLS.ListenerKeyFile = bundle.ServerKey.Name()
 	c.Kafka.TLS.CAChainCertFile = bundle.ServerCert.Name()
 
-	_, _, _, err := makeTLSHttpProxyPipe(c, "test-user", "test-password", "test-user", "bad-password")
+	_, _, _, err := makeTLSHttpProxyPipe(c, "test-user", "test-password", "test-user", "bad-password", EmptyConnectionContext())
 	a.NotNil(err)
 	a.Equal(err.Error(), "connect server using proxy error, statuscode [407]")
 }
@@ -318,7 +318,7 @@ func TestTLSVerifyClientCertDifferentCAs(t *testing.T) {
 	c.Kafka.TLS.ClientCertFile = bundle2.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle2.ClientKey.Name()
 
-	c1, c2, stop, err := makeTLSPipe(c, nil)
+	c1, c2, stop, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -341,7 +341,7 @@ func TestTLSVerifyClientCertSameCAs(t *testing.T) {
 	c.Kafka.TLS.ClientCertFile = bundle1.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle1.ClientKey.Name()
 
-	c1, c2, stop, err := makeTLSPipe(c, nil)
+	c1, c2, stop, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -362,7 +362,7 @@ func TestTLSMissingClientCert(t *testing.T) {
 
 	c.Kafka.TLS.CAChainCertFile = bundle1.ServerCert.Name()
 
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 	a.NotNil(err)
 	a.Contains(err.Error(), "tls: client didn't provide a certificate")
 }
@@ -384,7 +384,7 @@ func TestTLSBadClientCert(t *testing.T) {
 	c.Kafka.TLS.CAChainCertFile = bundle1.ServerCert.Name()
 	c.Kafka.TLS.ClientCertFile = bundle2.ClientCert.Name()
 	c.Kafka.TLS.ClientKeyFile = bundle2.ClientKey.Name()
-	_, _, _, err := makeTLSPipe(c, nil)
+	_, _, _, err := makeTLSPipe(c, nil, EmptyConnectionContext())
 
 	a.NotNil(err)
 	a.Contains(err.Error(), "tls: failed to verify certificate: x509: certificate signed by unknown authority")
@@ -449,7 +449,7 @@ func successfulPingPong(t *testing.T, conf *config.Config, clientCertFileToCheck
 
 	clientCertToCheck, _ := parseCertificate(clientCertFileToCheck)
 
-	c1, c2, stop, err := makeTLSPipe(conf, clientCertToCheck)
+	c1, c2, stop, err := makeTLSPipe(conf, clientCertToCheck, EmptyConnectionContext())
 	if err != nil {
 		a.FailNow(err.Error())
 	}
@@ -462,7 +462,7 @@ func pipelineSetupFailure(t *testing.T, conf *config.Config, clientCertFileToChe
 
 	expectedClientCert, _ := parseCertificate(clientCertFileToCheck)
 
-	_, _, _, err := makeTLSPipe(conf, expectedClientCert)
+	_, _, _, err := makeTLSPipe(conf, expectedClientCert, EmptyConnectionContext())
 
 	a.NotNil(err)
 	a.Equal(err.Error(), expectedErrMsg)

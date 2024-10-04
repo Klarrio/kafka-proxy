@@ -27,7 +27,7 @@ func TestAuthHandshakeHttpProxy(t *testing.T) {
 	testAuthHandshake(a, makeHttpProxyPipe)
 }
 
-func testAuthHandshake(a *assert.Assertions, mp func() (c1, c2 net.Conn, stop func(), err error)) {
+func testAuthHandshake(a *assert.Assertions, mp func(*ConnectionContext) (c1, c2 net.Conn, stop func(), err error)) {
 	magic, err := RandomUint64()
 	a.Nil(err)
 
@@ -57,7 +57,7 @@ func testAuthHandshake(a *assert.Assertions, mp func() (c1, c2 net.Conn, stop fu
 		timeout:   10 * time.Second,
 		tokenInfo: tokenInfo,
 	}
-	c1, c2, stop, err := mp()
+	c1, c2, stop, err := mp( EmptyConnectionContext())
 	a.Nil(err)
 	defer stop()
 
