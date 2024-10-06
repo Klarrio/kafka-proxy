@@ -353,7 +353,7 @@ QWCfsLrpwmPLYkEG9bKfsg11fW72jBPx+RLs/4ucjBcDI6kI5eGHkZU=
 		return nil, err
 	}
 
-	certStore.Add("test2", test1)
+	certStore.Add("test1", test1)
 	test2CertPEMBlock := []byte(`-----BEGIN CERTIFICATE-----
 MIICTjCCAfWgAwIBAgIRAIHHXqg/VV7LNeakO6qlr00wCgYIKoZIzj0EAwIwDjEM
 MAoGA1UEAxMDZHNoMB4XDTI0MTAwNDE5MTYzNVoXDTI1MDEwMjE5MTYzNVowNjEM
